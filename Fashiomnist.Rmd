@@ -475,8 +475,8 @@ plot_model_performance(history)
 
 ```{r Evaluation2, echo=FALSE, message=FALSE, warning=FALSE}
 #| fig.cap = "Cnn2 confusion matrix",
-#| fig.height = 2,
-#| fig.width = 4,
+#| fig.height = 4,
+#| fig.width = 6,
 #| fig.pos = "H"
 
 
@@ -578,6 +578,7 @@ y_test_factor <- factor(y_test, levels = 0:9)
 ```
 After training, the model is evaluated on the test dataset, where its performance is quantified using loss and accuracy metrics. The RNN model achieves a test loss of 0.24130 and an accuracy of 91.83%, indicating its efficiency in classifying fashion items.
 
+
 ```{r Accuracy Plot, echo=FALSE, message=FALSE, warning=FALSE}
 #| fig.subcap = c("Accuracy", "Loss"),
 #| fig.ncol = 2,
@@ -612,13 +613,16 @@ The project explored two different neural network architectures for classifying 
 
 CNN Model: The CNN, with its layered architecture tailored for image data, demonstrated excellent performance with an accuracy of approximately 94.37% and a test loss of 0.2383. It effectively captured spatial hierarchies in the data, making it well-suited for image classification tasks.
 
-RNN Model: The RNN, employing LSTM units, also performed admirably, achieving an accuracy of 91.83% with a test loss of 0.2413. Its ability to process data sequentially made it adept at handling image classification, although slightly less effective than the CNN in this context.
+RNN Model: The RNN, employing LSTM units, also performed admirably, achieving an accuracy of 91.83% with a test loss of 0.24130. Its ability to process data sequentially made it adept at handling image classification, although slightly less effective than the CNN in this context.
+
 
 In conclusion both models proved capable, but the CNN showed a slight edge in accuracy, likely due to its specialization in processing image data. The RNN, while slightly less accurate, still presented a strong case for its use in image-based tasks, especially where sequential data processing is crucial. The choice between CNN and RNN for similar tasks would depend on specific requirements and data characteristics.
 
 
+## Discussion and Limitation
+In discussing the Fashion MNIST project, we ran into a bunch of challenges that really made us think on our feet. Figuring out what layers and neurons to use and what hyperparameters to change for our CNN and RNN models. I also had  to make sure large datasets were prepped and normalized just right for the neural networks. Getting our code, visuals, and results to look good in R Markdown had its  challenges like as mismatched tensor shapes, when building and training models.
 
-
+One of the bigger hurdles was the amount of computing power needed for the deep learning models, especially the CNNs. I had to reduce the number of training epochs because it was just too computationaly expensive for the system. All these challenges proved to be a real learning curve, especially in working with neural networks and image classification.
 ```{r Code Appendix, echo=FALSE, eval=FALSE}
 knitr::purl("Fashionmnist.Rmd", output = "Fashionmnist.R")
 
