@@ -1,0 +1,627 @@
+---
+title: "Fashion MNIST Classification with CNN and RNN"
+author: "Olachi Mbakwe"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    keep_tex: true
+header-includes:
+  - \usepackage{subfig}
+  - \usepackage{float}
+  - \usepackage{booktabs}
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  cache = TRUE
+)
+
+```
+
+
+```{r packages, include=FALSE}
+
+# Load packages used in this guide ----
+packages <- c("keras","tensorflow", "readr", "knitr","kableExtra","tfdatasets",
+              "tfautograph","tfruns", "reticulate", "grid", "gridExtra",
+              "ggplot2","pROC","separationplot","caret")
+
+
+invisible(
+  lapply( 
+    X = packages,
+    FUN = library,
+    character.only = TRUE,
+    quietly = TRUE
+  )
+)
+
+# Set the CRAN mirror
+options(repos = "https://cran.rstudio.com/")
+
+# Set Table Option ----
+options(knitr.kable.NA = "") 
+
+```
+
+# Overview
+I will be utilizing the Fashion MNIST dataset, which is a modern replacement for the classic MNIST dataset, the project explores the effectiveness of Convolutional Neural Networks (CNNs) and Recurrent Neural Networks (RNNs) in distinguishing among various categories of clothing items. The goal is to leverage the strengths of these models to achieve high accuracy in classification tasks, which can be helpful in various applications such as e-commerce, inventory management, and customer recommendation systems
+
+
+## Introduction
+The Fashion MNIST dataset is a collection of 70,000 grayscale images across ten fashion categories. Each image is 28x28 pixels, providing a uniform scale for analysis. This dataset is widely used for benchmarking machine learning algorithms in image classification, providing a more challenging alternative to the traditional MNIST dataset of handwritten digits.
+
+
+### Objective
+
+The primary objective of this project is to construct and compare the performance of CNN and RNN models on the Fashion MNIST dataset. By doing so, the project aims to identify the most suitable model architecture for image-based fashion item classification and to fine-tune this model to maximize classification accuracy
+
+### Data Acquisition
+
+Each image is labeled with one of ten categories(T-shirt/top, Trouser, Pullover,Dress,Coat,Sandal,Shirt,Sneaker,Bag, Ankle Boot), representing different types of clothing. I have loaded the dataset isinto R for preprocessing and model training.
+
+```{r Data, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Load training and test data
+train.data <- read_csv("Downloads/fashion-mnist_train.csv",
+                       col_types = cols(.default = "i"))
+test.data <- read_csv("Downloads/fashion-mnist_test.csv",
+                      col_types = cols(.default = "i"))
+```
+
+
+### Data Preprocessing
+For my data preprocessing phase to prepare the raw Fashion MNIST dataset for effective machine learning modeling.This phase involves several steps, including:
+
+-  'Label and Image Extraction': The dataset's labels (representing clothing categories) are separated from the pixel values (representing the image data) for both training and test sets.
+
+-  'Normalization': Pixel values are normalized by scaling them to a range of 0 to 1. This improves the convergence speed during the training of neural networks and leads to better performance.
+
+-  'Reshaping': Images are reshaped from a flat list of 784 pixel values to a 28x28x1 three-dimensional array, which is the required format for processing by convolutional layers in the neural network models.
+
+```{r Preprocessing, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+# Extract labels and images
+train_labels <- train.data$label
+train_images <- train.data %>% select(-label) %>% as.matrix()
+test_labels <- test.data$label
+test_images <- test.data %>% select(-label) %>% as.matrix()
+
+# Normalize the images by dividing by 255
+train_images <- train_images / 255
+test_images <- test_images / 255
+
+# Reshape the images to 28x28
+train_images <- array(train_images, dim = c(nrow(train_images), 28, 28))
+test_images <- array(test_images, dim = c(nrow(test_images), 28, 28))
+
+
+```
+
+
+```{r Label, echo=FALSE, message=FALSE, warning=FALSE}
+#| fig.subcap = c("Train Data", "Testing data"),
+#| fig.ncol = 2,
+#| out.width = "50%",
+#| fig.height = 5,
+#| fig.pos = "H",
+#| fig.show = "hold"
+
+# Function to plot label distribution
+plot_label_per_class <- function(data, title) {
+  labels <- c("T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
+              "Sandal", "Shirt", "Sneaker", "Bag", "Ankle Boot")
+
+ggplot(data, aes(x = factor(label, labels = labels))) +
+    geom_bar() +
+    labs(title = title, x = "Category", y = "Count") +
+    theme_minimal()
+}
+
+# Plot for train and test data
+plot_label_per_class(train.data, "Number of labels for each class in Training Data")
+plot_label_per_class(test.data, "Number of labels for each class in Test Data")
+
+```
+
+
+## Label Visualization
+
+For this section i am showing the various labels with the clothing items for both the train and test datasets
+
+
+```{r Visualisation, echo=FALSE, message=FALSE, warning=FALSE}
+#| fig.subcap = c("Train Data", "Testing data"),
+#| fig.ncol = 2,
+#| out.width = "50%",
+#| fig.height = 5,
+#| fig.pos = "H",
+#| fig.show = "hold"
+sample_images_data <- function(data) {
+  label_names <- c("T-shirt/top", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot")
+  sample_images <- list()
+  sample_labels <- c()
+
+  for (k in 0:9) {
+    # Filter and take 4 samples for each category
+    samples <- subset(data, label == k)[1:4, ]
+    
+    for (j in 1:nrow(samples)) {
+      # Convert each row to a 28x28 matrix
+      img <- matrix(as.numeric(samples[j, -1]), nrow = 28, ncol = 28)
+      sample_images[[length(sample_images) + 1]] <- img
+      sample_labels <- c(sample_labels, label_names[k + 1])
+    }
+  }
+
+  cat("Total number of sample images to plot:", length(sample_images), "\n")
+  return(list(images = sample_images, labels = sample_labels))
+}
+
+
+result <- sample_images_data(train.data)
+train_sample_images <- result$images
+train_sample_labels <- result$labels
+
+plot_sample_images <- function(data_sample_images, data_sample_labels) {
+  plots <- list()
+  label_names <- c("T-shirt/top", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot")
+
+  # Create a named vector for mapping label names to numeric indices
+  label_indices <- setNames(0:9, label_names)
+
+  for (i in 1:length(data_sample_images)) {
+    # Normalize the image data to [0, 1]
+    img_matrix <- t(apply(data_sample_images[[i]], 2, rev)) / 255
+
+    # Map label name to its numeric index
+    label_index <- label_indices[data_sample_labels[i]]
+
+    # Create a plot for each image
+    p <- grid::rasterGrob(img_matrix, interpolate = TRUE)
+
+    plots[[i]] <- gridExtra::arrangeGrob(p, top = label_names[label_index + 1])
+  }
+  do.call(gridExtra::grid.arrange, c(plots, ncol = 8))
+}
+
+
+plot_sample_images(train_sample_images, train_sample_labels)
+
+result_test <- sample_images_data(test.data)
+
+test_sample_images <- result_test$images
+test_sample_labels <- result_test$labels
+
+
+plot_sample_images(test_sample_images, test_sample_labels)
+
+```
+
+
+## Training spilt
+Next the pixel values are converted into matrices, the labels are one-hot encoded (transformed into a binary matrix representation of the input), and the training data is split into training and validation sets to enable model evaluation during the training process.
+
+```{r Traing spilt , echo=FALSE, message=FALSE, warning=FALSE}
+
+
+# Convert data frames to matrices
+train_matrix <- as.matrix(train.data[, -1]) / 255
+test_matrix <- as.matrix(test.data[, -1]) / 255
+
+# Reshape the image data to 28x28
+x_train <- array(train_matrix, dim = c(nrow(train_matrix), 28, 28, 1))
+x_test <- array(test_matrix, dim = c(nrow(test_matrix), 28, 28, 1))
+
+# Convert labels to categorical
+y_train <- to_categorical(train.data$label, num_classes = 10)
+y_test <- to_categorical(test.data$label, num_classes = 10)
+
+# Split x_train into training and validation sets
+set.seed(1234)
+train_indices <- sample(1:nrow(x_train), size = 0.8 * nrow(x_train))
+x_train_set <- x_train[train_indices, , ,]
+y_train_set <- y_train[train_indices, ]
+x_val_set <- x_train[-train_indices, , ,]
+y_val_set <- y_train[-train_indices, ]
+
+# Displaying dataset sizes
+cat("Training set size:", dim(x_train_set)[1], "\n")
+cat("Validation set size:", dim(x_val_set)[1], "\n")
+cat("Test set size:", dim(x_test)[1], "\n")
+
+
+```
+
+# Model 1: Convolutional Neural Network (CNN)
+
+ CNN  is designed for image classification tasks, particularly suited for the Fashion MNIST dataset.
+
+### Model Architecture
+The model begins with two convolutional layers, each with 32 filters of size 3x3. These layers are responsible for extracting features from the input images using the ReLU activation function. Each convolutional layer is followed by batch normalization, which stabilizes learning by normalizing the input layer by re-centering and re-scaling.Dropout layers are introduced after convolutional layers to prevent overfitting by randomly setting a fraction of input units to 0 at each update during training time.
+
+Then the data is flattened from a matrix to a vector to be fed into the dense layers.Two dense layers with 512 and 128 units respectively are used for high-level reasoning in the neural network. They are regularized with batch normalization and dropout. The final dense layer has 10 units with a softmax activation function, corresponding to the 10 classes of the Fashion MNIST dataset.
+
+```{r CNN model 1, echo=FALSE, message=FALSE, warning=FALSE}
+# Define the model
+cnn_model <- keras_model_sequential() %>%
+  layer_conv_2d(filters = 32, kernel_size = c(3, 3), activation = 'relu', input_shape = c(28, 28, 1)) %>%
+  layer_batch_normalization() %>%
+  
+  layer_conv_2d(filters = 32, kernel_size = c(3, 3), activation = 'relu') %>%
+  layer_batch_normalization() %>%
+  layer_dropout(0.25) %>%
+  
+  layer_conv_2d(filters = 64, kernel_size = c(3, 3), activation = 'relu') %>%
+  layer_batch_normalization() %>%
+  layer_dropout(0.25) %>%
+  
+  layer_flatten() %>%
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_batch_normalization() %>%
+  layer_dropout(0.5) %>%
+  
+  layer_dense(units = 128, activation = 'relu') %>%
+  layer_batch_normalization() %>%
+  layer_dropout(0.5) %>%
+  
+  layer_dense(units = 10, activation = 'softmax')
+
+# Compile the model
+cnn_model %>% compile(
+  loss = loss_categorical_crossentropy,
+  optimizer = optimizer_adam(),
+  metrics = 'accuracy'
+)
+
+
+
+```
+
+### Training the Model
+The model is trained for 10 epochs with a batch size of 256. It uses the Adam optimizer and categorical crossentropy as the loss function. Validation data is provided to monitor the performance of the model during training.
+```{r Traing the model, message=FALSE, warning=FALSE, include=FALSE}
+
+# Set the number of epochs and batch size
+# Train the model
+train_model <- cnn_model %>% fit(
+  x_train_set, y_train_set,
+  epochs = 10,
+  batch_size = 256,
+  validation_data = list(x_val_set, y_val_set)
+)
+
+```
+
+
+```{r Plot validation, echo=FALSE, message=FALSE, warning=FALSE}
+#| fig.subcap = c("Accuracy", "Loss"),
+#| fig.ncol = 2,
+#| out.width = "50%",
+#| fig.height = 5,
+#| fig.pos = "H",
+#| fig.show = "hold"
+plot_model_performance <- function(history) {
+    # Plotting accuracy
+    plot(history$metrics$accuracy, type = "l", col = "red", ylim = c(0, 1), xlab = "Epochs", ylab = "Accuracy", main = "Training and Validation Accuracy")
+    lines(history$metrics$val_accuracy, col = "blue")
+    legend("bottomright", legend = c("Training", "Validation"), col = c("red", "blue"), lty = 1)
+
+    # Plotting loss
+    plot(history$metrics$loss, type = "l", col = "red", xlab = "Epochs", ylab = "Loss", main = "Training and Validation Loss")
+    lines(history$metrics$val_loss, col = "blue")
+    legend("bottomright", legend = c("Training", "Validation"), col = c("red", "blue"), lty = 1)
+}
+
+plot_model_performance(train_model)
+
+```
+
+
+### Evaluating the Model
+
+```{r Evaluation, echo=FALSE, message=FALSE, warning=FALSE}
+#| fig.cap = "cnn matrix",
+#| fig.height = 4,
+#| fig.width = 6,
+#| fig.pos = "H"
+library(keras)
+# Evaluate the model on test data
+score <- cnn_model %>% evaluate(x_test, y_test, verbose = 0)
+cat("Test loss:", score[[1]], "\n")
+cat("Test accuracy:", score[[2]], "\n")
+
+# Make predictions
+predictions <- cnn_model %>% predict(x_test)
+
+# Convert predictions to class labels
+predicted_classes <- apply(predictions, 1, which.max) - 1  # Subtracting 1 because R is 1-indexed
+
+# Ensure y_test is a vector of correct length
+y_test <- as.vector(test.data$label)
+
+
+predicted_classes_factor <- factor(predicted_classes, levels = 0:9)
+y_test_factor <- factor(y_test, levels = 0:9)
+
+# Calculate the confusion matrix
+conf_matrix <- confusionMatrix(predicted_classes_factor, y_test_factor)
+
+
+confusionMatrixPlot <- function(conf_matrix) {
+  # Convert the confusion matrix to a data frame for ggplot
+  labels <- c("T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
+                "Sandal", "Shirt", "Sneaker", "Bag", "Ankle Boot")
+  cm_df <- as.data.frame(as.table(conf_matrix$table))
+  colnames(cm_df) <- c('Prediction', 'Reference', 'Freq')
+
+  # Plot using ggplot
+  ggplot(data = cm_df, aes(x = Reference, y = Prediction, fill = Freq)) +
+    geom_tile(color = "white") +
+    scale_fill_gradient(low = "white", high = "steelblue") +
+    geom_text(aes(label = sprintf("%0.0f", Freq)), vjust = 1) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(fill = "Count")+
+    scale_y_discrete(limits = rev(levels(factor(cm_df$Prediction)))) 
+}
+
+
+confusionMatrixPlot(conf_matrix)
+
+```
+The model achieves a test accuracy of approximately 92.35% with a loss of 0.2403382. The confusion matrix plot function visualizes the performance across all classes, showcasing where the model performs well and where it may confuse between different articles of clothing.
+
+The test results and confusion matrix indicate that the model is robust, though there is room for improvement in certain classes where the model may have made more misclassifications.
+
+### Improving the model 
+
+To enhance the performance of our initial CNN model, we introduce an improved version, cnn_model2. This model incorporates additional convolutional layers, increased filter sizes, and max pooling for better feature extraction and dimensionality reduction.
+
+
+In addition to the initial convolutional layers, we introduce more layers with higher filter counts (64 and 128). Max pooling layers follow the convolutional layers to reduce spatial dimensions and improve computational efficiency.Dropout rates are adjusted to optimize the balance between learning and overfitting. Batch normalization remains a key aspect to stabilize and accelerate the learning process.The model continues to use dense layers with high neuron counts (512 and 128) for complex feature learning. These layers are also regularized with dropout and batch normalization.The final layer with softmax activation remains unchanged to classify into 10 categories.
+```{r CNN model 2, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Reshape the image data to 28x28 (height x width) and add a channel dimension
+x_train <- array(train_matrix, dim = c(nrow(train_matrix), 28, 28, 1))
+x_test <- array(test_matrix, dim = c(nrow(test_matrix), 28, 28, 1))
+x_test <- array(x_test, dim = c(dim(x_test)[1], 28, 28))
+
+
+# Convert labels to categorical
+y_train <- to_categorical(train.data$label, num_classes = 10)
+y_test <- to_categorical(test.data$label, num_classes = 10)
+
+# Create a Sequential model
+cnn_model2 <- keras_model_sequential() %>%
+  layer_conv_2d(filters = 32, kernel_size = c(3, 3), activation = 'relu', input_shape = c(28, 28, 1)) %>%
+  layer_batch_normalization() %>%
+  layer_conv_2d(filters = 32, kernel_size = c(3, 3), activation = 'relu') %>%
+  layer_batch_normalization() %>%
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_conv_2d(filters = 64, kernel_size = c(3, 3), activation = 'relu') %>%
+  layer_batch_normalization() %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_conv_2d(filters = 128, kernel_size = c(3, 3), activation = 'relu') %>%
+  layer_batch_normalization() %>%
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>%
+  layer_dropout(rate = 0.25) %>%
+  layer_flatten() %>%
+  layer_dense(units = 512, activation = 'relu') %>%
+  layer_batch_normalization() %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 128, activation = 'relu') %>%
+  layer_batch_normalization() %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 10, activation = 'softmax')
+
+# Compile the model
+cnn_model2 %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = optimizer_adam(),
+  metrics = 'accuracy'
+)
+
+
+```
+
+### Testing new model 
+```{r Testing new model, message=FALSE, warning=FALSE, include=FALSE}
+
+# Fit the model
+history <- cnn_model2 %>% fit(
+  x_train_set, y_train_set,
+  batch_size = 256,
+  epochs = 10,
+  validation_data = list(x_val_set, y_val_set)
+)
+```
+
+```{r}
+# Evaluate the model
+score <- cnn_model2 %>% evaluate(x_test, y_test, verbose = 0)
+cat('Test loss:', score[[1]], '\n')
+cat('Test accuracy:', score[[2]], '\n')
+
+# Make predictions
+predictions <- cnn_model2 %>% predict(x_test)
+
+# Convert probabilities to class labels
+predicted_classes <- apply(predictions, 1, which.max) - 1  # Adjust for R's 1-based indexing
+
+# Ensure y_test is a vector of correct length
+y_test <- as.vector(test.data$label)
+
+```
+
+```{r Plot validation2, echo=FALSE, message=FALSE, warning=FALSE}
+#| fig.subcap = c("Accuracy", "Loss"),
+#| fig.ncol = 2,
+#| out.width = "50%",
+#| fig.height = 5,
+#| fig.pos = "H",
+#| fig.show = "hold"
+plot_model_performance(history)
+```
+
+
+
+```{r Evaluation2, echo=FALSE, message=FALSE, warning=FALSE}
+#| fig.cap = "Cnn2 confusion matrix",
+#| fig.height = 2,
+#| fig.width = 4,
+#| fig.pos = "H"
+
+
+predicted_classes_factor <- factor(predicted_classes, levels = 0:9)
+y_test_factor <- factor(y_test, levels = 0:9)
+
+# Calculate the confusion matrix
+cnn_matrix2 <- confusionMatrix(predicted_classes_factor, y_test_factor)
+
+
+confusionMatrixPlot(cnn_matrix2)
+
+```
+
+The test results of cnn_model2 demonstrate a promising performance with a test loss of 0.2383 and an accuracy of 94.37%. This indicates that the model has effectively learned to classify different fashion items with high accuracy than the previous model.
+
+
+
+
+
+# Model 2: Recurrent Neural Networks(RNN) 
+The RNN model employs Long Short-Term Memory (LSTM) units, renowned for their effectiveness in capturing long-range dependencies and sequences in data, making them ideal for tasks like image classification where spatial hierarchies are significant. This model is constructed with 128 LSTM units and includes dropout layers to mitigate overfitting. It also comprises dense layers with ReLU activation for high-level data processing, concluding with a softmax layer for classification into 10 categories.
+
+
+```{r Traing spilt2 , echo=FALSE, message=FALSE, warning=FALSE}
+
+# Reshape the data for the RNN
+x_train_rnn <- array_reshape(x_train, c(nrow(x_train), 28, 28))
+x_test_rnn <- array_reshape(x_test, c(nrow(x_test), 28, 28))
+
+# Convert labels to categorical
+y_train <- to_categorical(train.data$label, num_classes = 10)
+y_test <- to_categorical(test.data$label, num_classes = 10)
+
+
+
+```
+
+### Model Architecture
+```{r RNN, echo=FALSE, message=FALSE, warning=FALSE}
+
+#RNN model
+rnn_model <- keras_model_sequential() %>%
+  layer_lstm(units = 128, input_shape = c(28, 28)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 128, activation = 'relu') %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 10, activation = 'softmax')
+
+# Compile the RNN model
+rnn_model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = 'adam',
+  metrics = 'accuracy'
+)
+
+
+```
+
+# Training the Model
+The RNN model is trained for 10 epochs with a batch size of 256, using categorical crossentropy as the loss function and the Adam optimizer. Validation data is provided during training to monitor the model's performance and ensure it generalizes well beyond the training set
+```{r rnn validation, message=FALSE, warning=FALSE, include=FALSE}
+#Train the RNN model
+rnn_history <- rnn_model %>% fit(
+  x_train_set, y_train_set,
+  batch_size = 256,
+  epochs = 10,
+  validation_data = list(x_val_set, y_val_set)
+)
+
+```
+
+
+### Evaluation
+
+```{r Evaluation3, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Evaluate the model
+rnn_score <- rnn_model %>% evaluate(x_test, y_test, verbose = 0)
+cat('Test loss:', score[[1]], '\n')
+cat('Test accuracy:', score[[2]], '\n')
+
+# Make predictions with the RNN model
+rnn_predictions <- rnn_model %>% predict(x_test)
+
+# Convert  to class labels for the RNN model
+rnn_predicted_classes <- apply(rnn_predictions, 1, which.max) - 1  
+
+y_test <- as.vector(test.data$label)
+
+
+# Ensure y_test is a vector of correct length
+y_test <- as.vector(test.data$label)
+
+
+predicted_classes_factor <- factor(predicted_classes, levels = 0:9)
+y_test_factor <- factor(y_test, levels = 0:9)
+
+```
+After training, the model is evaluated on the test dataset, where its performance is quantified using loss and accuracy metrics. The RNN model achieves a test loss of 0.2164 and an accuracy of 92.21%, indicating its efficiency in classifying fashion items.
+
+```{r Accuracy Plot, echo=FALSE, message=FALSE, warning=FALSE}
+#| fig.subcap = c("Accuracy", "Loss"),
+#| fig.ncol = 2,
+#| out.width = "50%",
+#| fig.height = 5,
+#| fig.pos = "H",
+#| fig.show = "hold"
+plot_model_performance(rnn_history)
+```
+
+
+
+```{r Rnn Confusion matrix, echo=FALSE, message=FALSE, warning=FALSE}
+#| fig.cap =  "RNN Confusion Matrix",
+#| fig.height = 4,
+#| fig.width = 6,
+#| fig.pos = "H"
+
+# Calculate the confusion matrix for the RNN model
+rnn_conf_matrix <- confusionMatrix(factor(rnn_predicted_classes, levels = 0:9), factor(y_test, levels = 0:9))
+
+# Plotting
+confusionMatrixPlot(rnn_conf_matrix)
+```
+
+
+
+## Comparison and Conclusion
+
+
+The project explored two different neural network architectures for classifying fashion items from the Fashion MNIST dataset: a Convolutional Neural Network (CNN) and a Recurrent Neural Network (RNN).
+
+CNN Model: The CNN, with its layered architecture tailored for image data, demonstrated excellent performance with an accuracy of approximately 94.37% and a test loss of 0.2383. It effectively captured spatial hierarchies in the data, making it well-suited for image classification tasks.
+
+RNN Model: The RNN, employing LSTM units, also performed admirably, achieving an accuracy of 92.21% with a test loss of 0.2164. Its ability to process data sequentially made it adept at handling image classification, although slightly less effective than the CNN in this context.
+
+In conclusion both models proved capable, but the CNN showed a slight edge in accuracy, likely due to its specialization in processing image data. The RNN, while slightly less accurate, still presented a strong case for its use in image-based tasks, especially where sequential data processing is crucial. The choice between CNN and RNN for similar tasks would depend on specific requirements and data characteristics.
+
+
+
+
+```{r Code Appendix, echo=FALSE, eval=FALSE}
+knitr::purl("Fashionmnist.Rmd", output = "Fashionmnist.R")
+
+```
+
+
